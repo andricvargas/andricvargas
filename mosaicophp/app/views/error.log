@@ -1,0 +1,7 @@
+[05-Jan-2025 05:35:51 UTC] Request URI: /login
+[05-Jan-2025 05:35:51 UTC] Request Method: GET
+[05-Jan-2025 05:35:51 UTC] Content Type: 
+[05-Jan-2025 05:36:16 UTC] Request URI: /login
+[05-Jan-2025 05:36:16 UTC] Request Method: GET
+[05-Jan-2025 05:36:16 UTC] Content Type: 
+[05-Jan-2025 05:36:16 UTC] PHP Warning:  Undefined variable $isLoginForm in /home/infosind/andricvargas.com/main/MosaicoPHP/app/views/login.php on line 96
