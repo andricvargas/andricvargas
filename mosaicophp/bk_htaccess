@@ -1,17 +1,17 @@
 RewriteEngine On
 RewriteBase /mosaicophp/
 
+# Si el archivo o directorio no existe físicamente
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Redirige todas las peticiones a index.php
+RewriteRule ^(.*)$ index.php [QSA,L]
+
 # Permitir CORS para desarrollo local
 Header set Access-Control-Allow-Origin "*"
 Header set Access-Control-Allow-Methods "GET, POST, OPTIONS"
 Header set Access-Control-Allow-Headers "Content-Type"
 
 # Habilitar reescritura de URLs
-Options +FollowSymLinks
-
-# Si el archivo o directorio no existe físicamente
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-# Redirige todas las peticiones a index.php con la ruta como parámetro
-RewriteRule ^(.*)$ index.php?url=$1 [QSA,L]
+Options +FollowSymLinks 
