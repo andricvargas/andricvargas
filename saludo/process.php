@@ -93,7 +93,6 @@ if (isset($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'
         'errors' => $errors,
         'saludos' => $saludos
     ]);
-    exit;
 } else {
     // Si no es AJAX, incluir la vista
     include 'view.php';
