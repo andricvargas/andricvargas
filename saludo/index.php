@@ -30,16 +30,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Error en reCAPTCHA';
     }
 
+
     // Verificar límite de tiempo por IP
     $ip = getClientIP();
     $stmt = $pdo->prepare("SELECT fecha FROM saludos WHERE ip_address = ? ORDER BY fecha DESC LIMIT 1");
     $stmt->execute([$ip]);
     $ultimo = $stmt->fetch();
-    
-    if ($ultimo && (time() - strtotime($ultimo['fecha'])) < TIEMPO_ESPERA) {
-        $errors[] = 'Debes esperar 5 minutos entre cada envío';
+
+    if ($ultimo) {
+        $ultimoTimestamp = strtotime($ultimo['fecha']);
+        $tiempoTranscurrido = time() - $ultimoTimestamp;
+        
+        if ($tiempoTranscurrido < TIEMPO_ESPERA) {
+            $tiempoRestante = TIEMPO_ESPERA - $tiempoTranscurrido;
+            $minutos = floor($tiempoRestante / 60);
+            $segundos = $tiempoRestante % 60;
+            
+            $errors[] = sprintf(
+                'Debes esperar %d minutos y %d segundos antes de enviar otro saludo',
+                $minutos,
+                $segundos
+            );
+        }
     }
 
+    if (empty($errors)) {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
+            $stmt->execute([$saludo, $ip]);
+            $success = true;
+            
+            // Limpiar el campo del formulario después de un envío exitoso
+            $_POST['saludo'] = '';
+        } catch (PDOException $e) {
+            $errors[] = 'Error al guardar el saludo: ' . $e->getMessage();
+        }
+    }
+
+    echo "IP detectada: " . $ip . "<br>";
     // Validar y sanitizar saludo
     $saludo = trim($_POST['saludo'] ?? '');
     
@@ -65,6 +93,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $errors[] = 'Error al guardar el saludo';
         }
     }
+}
+
+
+function getClientIP() {
+    $ip = '';
+    
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        $ip = $_SERVER['REMOTE_ADDR'];
+    }
+    
+    // Si hay múltiples IPs (proxies), tomar la primera
+    if (strpos($ip, ',') !== false) {
+        $ips = explode(',', $ip);
+        $ip = trim($ips[0]);
+    }
+    
+    return $ip;
 }
 
 // Obtener todos los saludos
