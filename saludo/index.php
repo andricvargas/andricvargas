@@ -14,19 +14,15 @@ $procesarFormulario = false; // Inicializar como false por defecto
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // Check time limit by IP first, before any other validation
     $ip = getClientIP();
-    
-    // Verificar si hay registros previos con esta IP
-    $stmt = $pdo->prepare("SELECT MAX(fecha) as ultima_fecha FROM saludos WHERE ip_address = ?");
+    $stmt = $pdo->prepare("SELECT fecha FROM saludos WHERE ip_address = ? ORDER BY fecha DESC LIMIT 1");
     $stmt->execute([$ip]);
-    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
-    
-    if ($resultado && $resultado['ultima_fecha']) {
-        // Calcular tiempo transcurrido desde el último registro
-        $ultimoTimestamp = strtotime($resultado['ultima_fecha']);
+    $ultimo = $stmt->fetch();
+
+    if ($ultimo) {
+        $ultimoTimestamp = strtotime($ultimo['fecha']);
         $tiempoTranscurrido = time() - $ultimoTimestamp;
         
         if ($tiempoTranscurrido < TIEMPO_ESPERA) {
-            // No ha pasado suficiente tiempo
             $tiempoRestante = TIEMPO_ESPERA - $tiempoTranscurrido;
             $minutos = floor($tiempoRestante / 60);
             $segundos = $tiempoRestante % 60;
@@ -36,16 +32,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $minutos,
                 $segundos
             );
+            $procesarFormulario = false;
         } else {
-            // Ha pasado suficiente tiempo, permitir procesar
             $procesarFormulario = true;
         }
     } else {
-        // No hay registros previos con esta IP, permitir procesar
         $procesarFormulario = true;
     }
 
-    // Solo procesar si ha pasado el tiempo suficiente o no hay registros previos
     if ($procesarFormulario) {
         // Validar y sanitizar saludo
         $saludo = trim($_POST['saludo'] ?? '');
@@ -68,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = [
             'secret' => RECAPTCHA_SECRET_KEY,
             'response' => $recaptcha,
-            'remoteip' => $ip
+            'remoteip' => getClientIP()
         ];
         
         $options = [
@@ -89,17 +83,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Insertar en base de datos si no hay errores
         if (empty($errors)) {
             try {
-                // Usar NOW() con precisión de segundos para evitar duplicados en el mismo segundo
                 $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
                 $stmt->execute([$saludo, $ip]);
                 $success = true;
                 $_POST['saludo'] = ''; // Limpiar el campo después de éxito
             } catch (PDOException $e) {
-                $errors[] = 'Error al guardar el saludo: ' . $e->getMessage();
+                $errors[] = 'Error al guardar el saludo';
             }
         }
-    }
-}
+    } // Añadida llave de cierre para el bloque if ($procesarFormulario)
+} // Llave de cierre para el bloque if ($_SERVER['REQUEST_METHOD'] === 'POST')
 
 // Obtener todos los saludos
 $stmt = $pdo->query("SELECT saludo, fecha FROM saludos ORDER BY fecha DESC");
@@ -162,7 +155,7 @@ $saludos = $stmt->fetchAll();
     <tbody>
     <?php foreach ($saludos as $s): ?>
     <tr>
-    <td><?= htmlspecialchars(date('d/m/Y H:i:s', strtotime($s['fecha']))) ?></td>
+    <td><?= htmlspecialchars(date('d/m/Y H:i', strtotime($s['fecha']))) ?></td>
     <td><?= nl2br(htmlspecialchars($s['saludo'])) ?></td>
     </tr>
     <?php endforeach ?>
