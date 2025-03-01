@@ -1,61 +1,32 @@
 <?php
 require 'config.php';
 
+// Define wait time if not in config.php (5 minutes in seconds)
+if (!defined('TIEMPO_ESPERA')) {
+    define('TIEMPO_ESPERA', 300); // 5 minutes in seconds
+}
+
 // Procesar formulario
 $errors = [];
 $success = false;
+$procesarFormulario = false; // Inicializar como false por defecto
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Validar y sanitizar saludo
-    $saludo = trim($_POST['saludo'] ?? '');
-    
-    if (empty($saludo)) {
-        $errors[] = 'El saludo no puede estar vacío';
-    } elseif (mb_strlen($saludo) > 200) {
-        $errors[] = 'El saludo no puede exceder 200 caracteres';
-    }
-    
-    // Eliminar etiquetas HTML y verificar enlaces
-    $saludo = strip_tags($saludo);
-    if (preg_match('/https?:\/\/|www\.|\[url\]/i', $saludo)) {
-        $errors[] = 'No se permiten enlaces en el saludo';
-    }
-
-    // Verificar reCAPTCHA
-    $recaptcha = $_POST['g-recaptcha-response'] ?? '';
-    $url = 'https://www.google.com/recaptcha/api/siteverify';
-    $data = [
-        'secret' => RECAPTCHA_SECRET_KEY,
-        'response' => $recaptcha,
-        'remoteip' => getClientIP()
-    ];
-    
-    $options = [
-        'http' => [
-            'header' => "Content-type: application/x-www-form-urlencoded\r\n",
-            'method' => 'POST',
-            'content' => http_build_query($data)
-        ]
-    ];
-    
-    $context = stream_context_create($options);
-    $result = json_decode(file_get_contents($url, false, $context));
-    
-    if (!$result->success) {
-        $errors[] = 'Error en reCAPTCHA';
-    }
-
-    // Verificar límite de tiempo por IP
+    // Check time limit by IP first, before any other validation
     $ip = getClientIP();
-    $stmt = $pdo->prepare("SELECT fecha FROM saludos WHERE ip_address = ? ORDER BY fecha DESC LIMIT 1");
+    
+    // Verificar si hay registros previos con esta IP
+    $stmt = $pdo->prepare("SELECT MAX(fecha) as ultima_fecha FROM saludos WHERE ip_address = ?");
     $stmt->execute([$ip]);
-    $ultimo = $stmt->fetch();
-
-    if ($ultimo) {
-        $ultimoTimestamp = strtotime($ultimo['fecha']);
+    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    if ($resultado && $resultado['ultima_fecha']) {
+        // Calcular tiempo transcurrido desde el último registro
+        $ultimoTimestamp = strtotime($resultado['ultima_fecha']);
         $tiempoTranscurrido = time() - $ultimoTimestamp;
         
         if ($tiempoTranscurrido < TIEMPO_ESPERA) {
+            // No ha pasado suficiente tiempo
             $tiempoRestante = TIEMPO_ESPERA - $tiempoTranscurrido;
             $minutos = floor($tiempoRestante / 60);
             $segundos = $tiempoRestante % 60;
@@ -65,18 +36,67 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $minutos,
                 $segundos
             );
+        } else {
+            // Ha pasado suficiente tiempo, permitir procesar
+            $procesarFormulario = true;
         }
+    } else {
+        // No hay registros previos con esta IP, permitir procesar
+        $procesarFormulario = true;
     }
 
-    // Insertar en base de datos si no hay errores
-    if (empty($errors)) {
-        try {
-            $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
-            $stmt->execute([$saludo, $ip]);
-            $success = true;
-            $_POST['saludo'] = ''; // Limpiar el campo después de éxito
-        } catch (PDOException $e) {
-            $errors[] = 'Error al guardar el saludo';
+    // Solo procesar si ha pasado el tiempo suficiente o no hay registros previos
+    if ($procesarFormulario) {
+        // Validar y sanitizar saludo
+        $saludo = trim($_POST['saludo'] ?? '');
+        
+        if (empty($saludo)) {
+            $errors[] = 'El saludo no puede estar vacío';
+        } elseif (mb_strlen($saludo) > 200) {
+            $errors[] = 'El saludo no puede exceder 200 caracteres';
+        }
+        
+        // Eliminar etiquetas HTML y verificar enlaces
+        $saludo = strip_tags($saludo);
+        if (preg_match('/https?:\/\/|www\.|\[url\]/i', $saludo)) {
+            $errors[] = 'No se permiten enlaces en el saludo';
+        }
+
+        // Verificar reCAPTCHA
+        $recaptcha = $_POST['g-recaptcha-response'] ?? '';
+        $url = 'https://www.google.com/recaptcha/api/siteverify';
+        $data = [
+            'secret' => RECAPTCHA_SECRET_KEY,
+            'response' => $recaptcha,
+            'remoteip' => $ip
+        ];
+        
+        $options = [
+            'http' => [
+                'header' => "Content-type: application/x-www-form-urlencoded\r\n",
+                'method' => 'POST',
+                'content' => http_build_query($data)
+            ]
+        ];
+        
+        $context = stream_context_create($options);
+        $result = json_decode(file_get_contents($url, false, $context));
+        
+        if (!$result->success) {
+            $errors[] = 'Error en reCAPTCHA';
+        }
+
+        // Insertar en base de datos si no hay errores
+        if (empty($errors)) {
+            try {
+                // Usar NOW() con precisión de segundos para evitar duplicados en el mismo segundo
+                $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
+                $stmt->execute([$saludo, $ip]);
+                $success = true;
+                $_POST['saludo'] = ''; // Limpiar el campo después de éxito
+            } catch (PDOException $e) {
+                $errors[] = 'Error al guardar el saludo: ' . $e->getMessage();
+            }
         }
     }
 }
@@ -94,76 +114,76 @@ $saludos = $stmt->fetchAll();
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.google.com/recaptcha/api.js?render=<?= RECAPTCHA_SITE_KEY ?>"></script>
     <style>
-        .container { max-width: 800px; margin: 50px auto; }
-        .table { margin-top: 30px; }
-        .form-section { background: #f8f9fa; padding: 20px; border-radius: 8px; }
+    .container { max-width: 800px; margin: 50px auto; }
+    .table { margin-top: 30px; }
+    .form-section { background: #f8f9fa; padding: 20px; border-radius: 8px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="form-section">
-            <h2>Registrar Saludo</h2>
-            <?php if ($success): ?>
-                <div class="alert alert-success">¡Saludo registrado correctamente!</div>
-            <?php elseif (!empty($errors)): ?>
-                <div class="alert alert-danger">
-                    <?php foreach ($errors as $error): ?>
-                        <p><?= htmlspecialchars($error) ?></p>
-                    <?php endforeach ?>
-                </div>
-            <?php endif ?>
-            
-            <form method="POST" id="form-saludo">
-                <div class="mb-3">
-                    <textarea 
-                        class="form-control" 
-                        name="saludo" 
-                        maxlength="200"
-                        rows="3"
-                        placeholder="Escribe tu saludo aquí (máximo 200 caracteres)"
-                        required><?= htmlspecialchars($_POST['saludo'] ?? '') ?></textarea>
-                </div>
-                
-                <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
-                
-                <button type="submit" class="btn btn-primary">Enviar Saludo</button>
-            </form>
-        </div>
+    <div class="form-section">
+    <h2>Registrar Saludo</h2>
+    <?php if ($success): ?>
+    <div class="alert alert-success">¡Saludo registrado correctamente!</div>
+    <?php elseif (!empty($errors)): ?>
+    <div class="alert alert-danger">
+    <?php foreach ($errors as $error): ?>
+    <p><?= htmlspecialchars($error) ?></p>
+    <?php endforeach ?>
+    </div>
+    <?php endif ?>
+    
+    <form method="POST" id="form-saludo">
+    <div class="mb-3">
+    <textarea 
+    class="form-control" 
+    name="saludo" 
+    maxlength="200"
+    rows="3"
+    placeholder="Escribe tu saludo aquí (máximo 200 caracteres)"
+    required><?= htmlspecialchars($_POST['saludo'] ?? '') ?></textarea>
+    </div>
+    
+    <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
+    
+    <button type="submit" class="btn btn-primary">Enviar Saludo</button>
+    </form>
+    </div>
 
-        <h2 class="mt-5">Listado de Saludos</h2>
-        <?php if (!empty($saludos)): ?>
-            <table class="table table-striped table-hover">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Saludo</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($saludos as $s): ?>
-                        <tr>
-                            <td><?= htmlspecialchars(date('d/m/Y H:i', strtotime($s['fecha']))) ?></td>
-                            <td><?= nl2br(htmlspecialchars($s['saludo'])) ?></td>
-                        </tr>
-                    <?php endforeach ?>
-                </tbody>
-            </table>
-        <?php else: ?>
-            <p class="text-muted">No hay saludos registrados aún</p>
-        <?php endif ?>
+    <h2 class="mt-5">Listado de Saludos</h2>
+    <?php if (!empty($saludos)): ?>
+    <table class="table table-striped table-hover">
+    <thead>
+    <tr>
+    <th>Fecha</th>
+    <th>Saludo</th>
+    </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($saludos as $s): ?>
+    <tr>
+    <td><?= htmlspecialchars(date('d/m/Y H:i:s', strtotime($s['fecha']))) ?></td>
+    <td><?= nl2br(htmlspecialchars($s['saludo'])) ?></td>
+    </tr>
+    <?php endforeach ?>
+    </tbody>
+    </table>
+    <?php else: ?>
+    <p class="text-muted">No hay saludos registrados aún</p>
+    <?php endif ?>
     </div>
 
     <script>
-        // reCAPTCHA v3
-        grecaptcha.ready(function() {
-            document.getElementById('form-saludo').addEventListener('submit', function(e) {
-                e.preventDefault();
-                grecaptcha.execute('<?= RECAPTCHA_SITE_KEY ?>', {action: 'submit'}).then(function(token) {
-                    document.getElementById('g-recaptcha-response').value = token;
-                    document.getElementById('form-saludo').submit();
-                });
-            });
-        });
+    // reCAPTCHA v3
+    grecaptcha.ready(function() {
+    document.getElementById('form-saludo').addEventListener('submit', function(e) {
+    e.preventDefault();
+    grecaptcha.execute('<?= RECAPTCHA_SITE_KEY ?>', {action: 'submit'}).then(function(token) {
+    document.getElementById('g-recaptcha-response').value = token;
+    document.getElementById('form-saludo').submit();
+    });
+    });
+    });
     </script>
 </body>
 </html>
