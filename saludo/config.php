@@ -1,38 +1,25 @@
 <?php
 // Configuración de la base de datos
-$host = 'localhost';
-$dbname = 'saludos_db';
-$username = 'root';
-$password = 'Anthony.17'; // Establece tu contraseña real aquí
-
-// Crear conexión PDO
-try {
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
-} catch(PDOException $e) {
-    die("ERROR: No se pudo conectar. " . $e->getMessage());
-}
+define('DB_HOST', 'localhost');
+define('DB_NAME', 'saludos_db');
+define('DB_USER', 'root');
+define('DB_PASS', 'Anthony.17');
 
 // Configuración de reCAPTCHA
-define('RECAPTCHA_ENABLED', false); // Flag para activar/desactivar reCAPTCHA
-define('RECAPTCHA_SECRET_KEY', '6LcBSq4qAAAAAEOOBOxL5bc1G1swV0QA79n');
 define('RECAPTCHA_SITE_KEY', '6LcBSq4qAAAAAD9WV6hNQ5mFfiVmBSsMkgCbNBl3');
+define('RECAPTCHA_SECRET_KEY', '6LcBSq4qAAAAAEOOBOxL5bc1G1swV0QA79n-Q6ho');
 
-// Tiempo de espera entre envíos (en segundos)
+// Configuración de límite de tiempo (segundos)
 define('TIEMPO_ESPERA', 300); // 5 minutos
 
 // Función para obtener IP del cliente
-// Only define the function if it doesn't already exist
-if (!function_exists('getClientIP')) {
-    function getClientIP() {
-        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-            return $_SERVER['HTTP_CLIENT_IP'];
-        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-            return $_SERVER['HTTP_X_FORWARDED_FOR'];
-        }
-        return $_SERVER['REMOTE_ADDR'];
+function getClientIP() {
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        return $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        return $_SERVER['HTTP_X_FORWARDED_FOR'];
     }
+    return $_SERVER['REMOTE_ADDR'];
 }
 
 // Conexión PDO
