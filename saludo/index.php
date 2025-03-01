@@ -6,6 +6,21 @@ $errors = [];
 $success = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Validar y sanitizar saludo
+    $saludo = trim($_POST['saludo'] ?? '');
+    
+    if (empty($saludo)) {
+        $errors[] = 'El saludo no puede estar vacío';
+    } elseif (mb_strlen($saludo) > 200) {
+        $errors[] = 'El saludo no puede exceder 200 caracteres';
+    }
+    
+    // Eliminar etiquetas HTML y verificar enlaces
+    $saludo = strip_tags($saludo);
+    if (preg_match('/https?:\/\/|www\.|\[url\]/i', $saludo)) {
+        $errors[] = 'No se permiten enlaces en el saludo';
+    }
+
     // Verificar reCAPTCHA
     $recaptcha = $_POST['g-recaptcha-response'] ?? '';
     $url = 'https://www.google.com/recaptcha/api/siteverify';
@@ -30,7 +45,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Error en reCAPTCHA';
     }
 
-
     // Verificar límite de tiempo por IP
     $ip = getClientIP();
     $stmt = $pdo->prepare("SELECT fecha FROM saludos WHERE ip_address = ? ORDER BY fecha DESC LIMIT 1");
@@ -54,41 +68,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if (empty($errors)) {
-        try {
-            $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
-            $stmt->execute([$saludo, $ip]);
-            $success = true;
-            
-            // Limpiar el campo del formulario después de un envío exitoso
-            $_POST['saludo'] = '';
-        } catch (PDOException $e) {
-            $errors[] = 'Error al guardar el saludo: ' . $e->getMessage();
-        }
-    }
-
-    echo "IP detectada: " . $ip . "<br>";
-    // Validar y sanitizar saludo
-    $saludo = trim($_POST['saludo'] ?? '');
-    
-    if (empty($saludo)) {
-        $errors[] = 'El saludo no puede estar vacío';
-    } elseif (mb_strlen($saludo) > 200) {
-        $errors[] = 'El saludo no puede exceder 200 caracteres';
-    }
-    
-    // Eliminar etiquetas HTML y verificar enlaces
-    $saludo = strip_tags($saludo);
-    if (preg_match('/https?:\/\/|www\.|\[url\]/i', $saludo)) {
-        $errors[] = 'No se permiten enlaces en el saludo';
-    }
-
     // Insertar en base de datos si no hay errores
     if (empty($errors)) {
         try {
             $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
             $stmt->execute([$saludo, $ip]);
             $success = true;
+            $_POST['saludo'] = ''; // Limpiar el campo después de éxito
         } catch (PDOException $e) {
             $errors[] = 'Error al guardar el saludo';
         }
@@ -135,7 +121,7 @@ $saludos = $stmt->fetchAll();
                         maxlength="200"
                         rows="3"
                         placeholder="Escribe tu saludo aquí (máximo 200 caracteres)"
-                        required></textarea>
+                        required><?= htmlspecialchars($_POST['saludo'] ?? '') ?></textarea>
                 </div>
                 
                 <input type="hidden" name="g-recaptcha-response" id="g-recaptcha-response">
