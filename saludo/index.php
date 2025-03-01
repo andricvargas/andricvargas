@@ -1,45 +1,82 @@
 <?php
 require 'config.php';
 
+// Establecer zona horaria para asegurar consistencia
+date_default_timezone_set('America/Mexico_City'); // Ajusta a tu zona horaria
+
 // Define wait time if not in config.php (5 minutes in seconds)
 if (!defined('TIEMPO_ESPERA')) {
     define('TIEMPO_ESPERA', 300); // 5 minutes in seconds
 }
 
+// Función mejorada para obtener IP
+function getClientIP_safe() {
+    $ip = getClientIP(); // Usar la función existente
+    
+    // Verificar que la IP es válida
+    if (filter_var($ip, FILTER_VALIDATE_IP)) {
+        return $ip;
+    }
+    
+    // IP de respaldo si no se puede obtener una válida
+    return '0.0.0.0';
+}
+
 // Procesar formulario
 $errors = [];
 $success = false;
-$procesarFormulario = false; // Inicializar como false por defecto
+$procesarFormulario = false;
+$tiempoRestanteMsg = '';
+$debugInfo = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Check time limit by IP first, before any other validation
-    $ip = getClientIP();
-    $stmt = $pdo->prepare("SELECT fecha FROM saludos WHERE ip_address = ? ORDER BY fecha DESC LIMIT 1");
+    // Obtener IP de forma segura
+    $ip = getClientIP_safe();
+    
+    // Comprobar si esta IP ya ha enviado un saludo en los últimos 5 minutos
+    $stmt = $pdo->prepare("
+        SELECT UNIX_TIMESTAMP(fecha) as timestamp_ultimo 
+        FROM saludos 
+        WHERE ip_address = ? 
+        ORDER BY fecha DESC 
+        LIMIT 1
+    ");
     $stmt->execute([$ip]);
-    $ultimo = $stmt->fetch();
-
-    if ($ultimo) {
-        $ultimoTimestamp = strtotime($ultimo['fecha']);
-        $tiempoTranscurrido = time() - $ultimoTimestamp;
+    $ultimo = $stmt->fetch(PDO::FETCH_ASSOC);
+    
+    $tiempoActual = time();
+    
+    if ($ultimo && isset($ultimo['timestamp_ultimo'])) {
+        $ultimoTimestamp = (int)$ultimo['timestamp_ultimo'];
+        $tiempoTranscurrido = $tiempoActual - $ultimoTimestamp;
         
+        // Guardar información de depuración
+        $debugInfo = "IP: {$ip}, Último envío: " . date('Y-m-d H:i:s', $ultimoTimestamp) . 
+                    ", Tiempo actual: " . date('Y-m-d H:i:s', $tiempoActual) . 
+                    ", Transcurrido: {$tiempoTranscurrido}s, Límite: " . TIEMPO_ESPERA . "s";
+        
+        // Verificar si ha pasado suficiente tiempo
         if ($tiempoTranscurrido < TIEMPO_ESPERA) {
             $tiempoRestante = TIEMPO_ESPERA - $tiempoTranscurrido;
             $minutos = floor($tiempoRestante / 60);
             $segundos = $tiempoRestante % 60;
             
-            $errors[] = sprintf(
+            $tiempoRestanteMsg = sprintf(
                 'Debes esperar %d minutos y %d segundos antes de enviar otro saludo',
                 $minutos,
                 $segundos
             );
-            $procesarFormulario = false;
+            
+            $errors[] = $tiempoRestanteMsg;
         } else {
             $procesarFormulario = true;
         }
     } else {
+        // No hay saludos previos desde esta IP
         $procesarFormulario = true;
     }
 
+    // Solo procesar si ha pasado suficiente tiempo
     if ($procesarFormulario) {
         // Validar y sanitizar saludo
         $saludo = trim($_POST['saludo'] ?? '');
@@ -62,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $data = [
             'secret' => RECAPTCHA_SECRET_KEY,
             'response' => $recaptcha,
-            'remoteip' => getClientIP()
+            'remoteip' => $ip
         ];
         
         $options = [
@@ -83,16 +120,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Insertar en base de datos si no hay errores
         if (empty($errors)) {
             try {
-                $stmt = $pdo->prepare("INSERT INTO saludos (saludo, fecha, ip_address) VALUES (?, NOW(), ?)");
-                $stmt->execute([$saludo, $ip]);
-                $success = true;
-                $_POST['saludo'] = ''; // Limpiar el campo después de éxito
+                // Bloquear tabla para evitar condiciones de carrera
+                $pdo->exec("LOCK TABLES saludos WRITE");
+                
+                // Verificar nuevamente el límite de tiempo (evita race conditions)
+                $stmt = $pdo->prepare("
+                    SELECT COUNT(*) as recientes 
+                    FROM saludos 
+                    WHERE ip_address = ? AND fecha > DATE_SUB(NOW(), INTERVAL " . TIEMPO_ESPERA . " SECOND)
+                ");
+                $stmt->execute([$ip]);
+                $verificacion = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($verificacion && $verificacion['recientes'] > 0) {
+                    // Alguien intentó saltarse la validación
+                    $errors[] = 'Debes esperar 5 minutos entre cada saludo';
+                } else {
+                    // Usar NOW(3) para incluir milisegundos y evitar duplicados
+                    $stmt = $pdo->prepare("
+                        INSERT INTO saludos (saludo, fecha, ip_address) 
+                        VALUES (?, NOW(3), ?)
+                    ");
+                    $stmt->execute([$saludo, $ip]);
+                    $success = true;
+                    $_POST['saludo'] = ''; // Limpiar el campo después de éxito
+                }
+                
+                // Desbloquear tabla
+                $pdo->exec("UNLOCK TABLES");
             } catch (PDOException $e) {
-                $errors[] = 'Error al guardar el saludo';
+                // Asegurar que se desbloquee la tabla en caso de error
+                $pdo->exec("UNLOCK TABLES");
+                $errors[] = 'Error al guardar el saludo: ' . $e->getMessage();
             }
         }
-    } // Añadida llave de cierre para el bloque if ($procesarFormulario)
-} // Llave de cierre para el bloque if ($_SERVER['REQUEST_METHOD'] === 'POST')
+    }
+}
 
 // Obtener todos los saludos
 $stmt = $pdo->query("SELECT saludo, fecha FROM saludos ORDER BY fecha DESC");
@@ -155,7 +218,7 @@ $saludos = $stmt->fetchAll();
     <tbody>
     <?php foreach ($saludos as $s): ?>
     <tr>
-    <td><?= htmlspecialchars(date('d/m/Y H:i', strtotime($s['fecha']))) ?></td>
+    <td><?= htmlspecialchars(date('d/m/Y H:i:s', strtotime($s['fecha']))) ?></td>
     <td><?= nl2br(htmlspecialchars($s['saludo'])) ?></td>
     </tr>
     <?php endforeach ?>
