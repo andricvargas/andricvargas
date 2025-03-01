@@ -95,9 +95,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-
-
-
 // Obtener todos los saludos
 $stmt = $pdo->query("SELECT saludo, fecha FROM saludos ORDER BY fecha DESC");
 $saludos = $stmt->fetchAll();
