@@ -13,13 +13,16 @@ define('RECAPTCHA_SECRET_KEY', '6LcBSq4qAAAAAEOOBOxL5bc1G1swV0QA79n-Q6ho');
 define('TIEMPO_ESPERA', 300); // 5 minutos
 
 // Función para obtener IP del cliente
-function getClientIP() {
-    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        return $_SERVER['HTTP_CLIENT_IP'];
-    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        return $_SERVER['HTTP_X_FORWARDED_FOR'];
+// Only define the function if it doesn't already exist
+if (!function_exists('getClientIP')) {
+    function getClientIP() {
+        if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+            return $_SERVER['HTTP_CLIENT_IP'];
+        } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+            return $_SERVER['HTTP_X_FORWARDED_FOR'];
+        }
+        return $_SERVER['REMOTE_ADDR'];
     }
-    return $_SERVER['REMOTE_ADDR'];
 }
 
 // Conexión PDO
