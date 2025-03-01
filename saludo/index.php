@@ -96,25 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 
-function getClientIP() {
-    $ip = '';
-    
-    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        $ip = $_SERVER['HTTP_CLIENT_IP'];
-    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
-    } else {
-        $ip = $_SERVER['REMOTE_ADDR'];
-    }
-    
-    // Si hay múltiples IPs (proxies), tomar la primera
-    if (strpos($ip, ',') !== false) {
-        $ips = explode(',', $ip);
-        $ip = trim($ips[0]);
-    }
-    
-    return $ip;
-}
+
 
 // Obtener todos los saludos
 $stmt = $pdo->query("SELECT saludo, fecha FROM saludos ORDER BY fecha DESC");

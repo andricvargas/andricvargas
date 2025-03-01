@@ -14,12 +14,23 @@ define('TIEMPO_ESPERA', 300); // 5 minutos
 
 // Función para obtener IP del cliente
 function getClientIP() {
+    $ip = '';
+    
     if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
-        return $_SERVER['HTTP_CLIENT_IP'];
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
     } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        return $_SERVER['HTTP_X_FORWARDED_FOR'];
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        $ip = $_SERVER['REMOTE_ADDR'];
     }
-    return $_SERVER['REMOTE_ADDR'];
+    
+    // Si hay múltiples IPs (proxies), tomar la primera
+    if (strpos($ip, ',') !== false) {
+        $ips = explode(',', $ip);
+        $ip = trim($ips[0]);
+    }
+    
+    return $ip;
 }
 
 // Conexión PDO
