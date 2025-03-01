@@ -92,7 +92,7 @@ require 'config.php'; // Solo necesitamos la clave de recaptcha
                 
                 data.data.forEach(saludo => {
                     const fecha = formatearFecha(saludo.fecha);
-                    // Reemplazar saltos de línea con 
+                    // Corrección aquí - Reemplazar saltos de línea con 
  correctamente
                     const saludoTexto = escapeHtml(saludo.saludo).replace(/\n/g, '
 ');

@@ -1,12 +1,12 @@
 <?php
 require 'config.php';
 
-// Establecer zona horaria para asegurar consistencia
-date_default_timezone_set('America/Mexico_City'); // Ajusta a tu zona horaria
+// Establecer zona horaria
+date_default_timezone_set('America/Mexico_City'); // Ajusta esto a tu zona horaria
 
-// Define wait time if not in config.php (5 minutes in seconds)
+// Define el tiempo de espera si no está en config.php
 if (!defined('TIEMPO_ESPERA')) {
-    define('TIEMPO_ESPERA', 300); // 5 minutes in seconds
+    define('TIEMPO_ESPERA', 300); // 5 minutos en segundos
 }
 
 // Inicializar respuesta
@@ -16,28 +16,27 @@ $response = [
     'data' => []
 ];
 
-// Procesamiento de API
+// Manejo de solicitudes
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Obtener IP
+    // Procesar envío de saludo
     $ip = getClientIP();
     $procesarFormulario = false;
     
-    // Comprobar si esta IP ya ha enviado un saludo en los últimos 5 minutos
+    // Verificar límite de tiempo por IP
     $stmt = $pdo->prepare("
-        SELECT fecha 
+        SELECT MAX(fecha) as ultima_fecha 
         FROM saludos 
-        WHERE ip_address = ? 
-        ORDER BY fecha DESC 
-        LIMIT 1
+        WHERE ip_address = ?
     ");
     $stmt->execute([$ip]);
-    $ultimo = $stmt->fetch(PDO::FETCH_ASSOC);
+    $resultado = $stmt->fetch(PDO::FETCH_ASSOC);
     
-    if ($ultimo) {
-        $ultimoTimestamp = strtotime($ultimo['fecha']);
+    if ($resultado && !empty($resultado['ultima_fecha'])) {
+        $ultimoTimestamp = strtotime($resultado['ultima_fecha']);
         $tiempoTranscurrido = time() - $ultimoTimestamp;
         
         if ($tiempoTranscurrido < TIEMPO_ESPERA) {
+            // No ha pasado suficiente tiempo
             $tiempoRestante = TIEMPO_ESPERA - $tiempoTranscurrido;
             $minutos = floor($tiempoRestante / 60);
             $segundos = $tiempoRestante % 60;
@@ -51,11 +50,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $procesarFormulario = true;
         }
     } else {
-        // No hay saludos previos desde esta IP
         $procesarFormulario = true;
     }
-
-    // Solo procesar si ha pasado suficiente tiempo
+    
     if ($procesarFormulario) {
         // Validar y sanitizar saludo
         $saludo = trim($_POST['saludo'] ?? '');
@@ -71,7 +68,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (preg_match('/https?:\/\/|www\.|\[url\]/i', $saludo)) {
             $response['errors'][] = 'No se permiten enlaces en el saludo';
         }
-
+        
         // Verificar reCAPTCHA
         $recaptcha = $_POST['g-recaptcha-response'] ?? '';
         $url = 'https://www.google.com/recaptcha/api/siteverify';
@@ -95,11 +92,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$result->success) {
             $response['errors'][] = 'Error en reCAPTCHA';
         }
-
+        
         // Insertar en base de datos si no hay errores
         if (empty($response['errors'])) {
             try {
-                // Verificar nuevamente el límite de tiempo (evita race conditions)
+                // Verificar nuevamente antes de insertar (doble check)
                 $stmt = $pdo->prepare("
                     SELECT COUNT(*) as recientes 
                     FROM saludos 
@@ -109,7 +106,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $verificacion = $stmt->fetch(PDO::FETCH_ASSOC);
                 
                 if ($verificacion && $verificacion['recientes'] > 0) {
-                    // Alguien intentó saltarse la validación
                     $response['errors'][] = 'Debes esperar 5 minutos entre cada saludo';
                 } else {
                     $stmt = $pdo->prepare("
@@ -135,7 +131,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Devolver la respuesta como JSON
+// Asegurar que los encabezados HTTP son correctos
 header('Content-Type: application/json');
+header('Cache-Control: no-cache, no-store, must-revalidate');
 echo json_encode($response);
 exit;
