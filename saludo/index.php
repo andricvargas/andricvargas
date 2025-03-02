@@ -166,7 +166,7 @@ $saludos = $stmt->fetchAll();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Saludos</title>
+    <title>Happy Birthday To You!</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.google.com/recaptcha/api.js?render=<?= RECAPTCHA_SITE_KEY ?>"></script>
     <link href="styles.css" rel="stylesheet">
@@ -174,7 +174,7 @@ $saludos = $stmt->fetchAll();
 <body>
     <div class="container">
     <div class="form-section">
-    <h2 class="birthday-title"><span>R</span><span>e</span><span>g</span><span>i</span><span>s</span><span>t</span><span>r</span><span>a</span><span>r</span> <span>S</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span></h2>
+    <h2 class="birthday-title"> <span>R</span><span>e</span><span>g</span><span>i</span><span>s</span><span>t</span><span>r</span><span>a</span> <span>t</span><span>u</span> <span>s</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span></h2>
     <?php if ($success): ?>
     <div class="alert alert-success">¡Saludo registrado correctamente!</div>
     <?php elseif (!empty($errors)): ?>
@@ -202,7 +202,7 @@ $saludos = $stmt->fetchAll();
     </form>
     </div>
 
-    <h2 class="birthday-title mt-5"><span>L</span><span>i</span><span>s</span><span>t</span><span>a</span><span>d</span><span>o</span> <span>d</span><span>e</span> <span>S</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span><span>s</span></h2>
+    <h2 class="birthday-title mt-5"><span>&Uacute;</span><span>l</span><span>t</span><span>i</span><span>m</span><span>o</span><span>s</span> <span>S</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span><span>s</span></h2>
     <?php if (!empty($saludos)): ?>
     <table class="table table-striped table-hover">
     <thead>
