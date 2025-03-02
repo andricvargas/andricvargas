@@ -239,7 +239,7 @@ h2.birthday-title span:before {
     padding: 10px; 
     border-radius: 8px; 
     box-shadow: 0 0 15px rgba(255, 140, 0, 0.1); /* Sutil brillo anaranjado */
-    margin-bottom: 30px;
+    margin-bottom: 1%;
 }
 
 /* Campos de formulario */
