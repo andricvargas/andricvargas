@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 
-// Establecer zona horaria para asegurar consistencia
+// Establecer zona horaria para asegurar consistencia 
 date_default_timezone_set('America/Mexico_City'); // Ajusta a tu zona horaria
 
 // Define wait time if not in config.php (5 minutes in seconds)
@@ -158,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // Obtener todos los saludos
-$stmt = $pdo->query("SELECT saludo, fecha FROM saludos ORDER BY fecha DESC");
+$stmt = $pdo->query("SELECT saludo, fecha FROM saludos ORDER BY fecha DESC LIMIT 10");
 $saludos = $stmt->fetchAll();
 ?>
 <!DOCTYPE html>
@@ -169,16 +169,12 @@ $saludos = $stmt->fetchAll();
     <title>Saludos</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://www.google.com/recaptcha/api.js?render=<?= RECAPTCHA_SITE_KEY ?>"></script>
-    <style>
-    .container { max-width: 800px; margin: 50px auto; }
-    .table { margin-top: 30px; }
-    .form-section { background: #f8f9fa; padding: 20px; border-radius: 8px; }
-    </style>
+    <link href="styles.css" rel="stylesheet">
 </head>
 <body>
     <div class="container">
     <div class="form-section">
-    <h2>Registrar Saludo</h2>
+    <h2 class="birthday-title"><span>R</span><span>e</span><span>g</span><span>i</span><span>s</span><span>t</span><span>r</span><span>a</span><span>r</span> <span>S</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span></h2>
     <?php if ($success): ?>
     <div class="alert alert-success">¡Saludo registrado correctamente!</div>
     <?php elseif (!empty($errors)): ?>
@@ -206,7 +202,7 @@ $saludos = $stmt->fetchAll();
     </form>
     </div>
 
-    <h2 class="mt-5">Listado de Saludos</h2>
+    <h2 class="birthday-title mt-5"><span>L</span><span>i</span><span>s</span><span>t</span><span>a</span><span>d</span><span>o</span> <span>d</span><span>e</span> <span>S</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span><span>s</span></h2>
     <?php if (!empty($saludos)): ?>
     <table class="table table-striped table-hover">
     <thead>
