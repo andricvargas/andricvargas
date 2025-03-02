@@ -8,6 +8,7 @@ body {
 .container { 
     max-width: 800px; 
     margin: 50px auto; 
+    padding: 2%;
 }
 
 /* Títulos festivos con colores similares a las velas */
@@ -78,7 +79,7 @@ h2.birthday-title span:before {
     background-color: #222;
     border-color: #444;
     color: #ddd;
-    border-radius: 20px;
+    border-radius: 15px;
     padding: 15px;
 }
 
@@ -99,7 +100,7 @@ h2.birthday-title span:before {
     background: linear-gradient(45deg, #ff5252, #ff4081);
     border: none;
     box-shadow: 0 2px 5px rgba(255, 64, 129, 0.4);
-    border-radius: 25px;
+    border-radius: 15px;
     padding: 10px 25px;
     transition: all 0.3s ease;
 }
@@ -235,7 +236,7 @@ h2.birthday-title span:before {
 /* Formulario */
 .form-section { 
     background: rgba(18, 18, 18, 0.7); /* Fondo oscuro semi-transparente */
-    padding: 20px; 
+    padding: 10px; 
     border-radius: 8px; 
     box-shadow: 0 0 15px rgba(255, 140, 0, 0.1); /* Sutil brillo anaranjado */
     margin-bottom: 30px;
