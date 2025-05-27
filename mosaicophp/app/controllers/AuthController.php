@@ -6,7 +6,7 @@ class AuthController {
         $this->userRepository = new UserRepository();
     }
 
-    private function verifyCaptcha($captchaResponse): bool {
+    private function verifyCaptcha(string $captchaResponse): bool {
         if (empty($captchaResponse)) {
             return false;
         }
@@ -28,10 +28,18 @@ class AuthController {
         ];
 
         $context = stream_context_create($options);
-        $result = file_get_contents($url, false, $context);
-        $resultJson = json_decode($result);
-        
-        return $resultJson->success ?? false;
+        try {
+            $result = file_get_contents($url, false, $context);
+            if ($result === false) {
+                error_log("Error al verificar captcha: No se pudo obtener respuesta de la URL.");
+                return false;
+            }
+            $resultJson = json_decode($result);
+            return $resultJson->success ?? false;
+        } catch (Exception $e) {
+            error_log("Error al verificar captcha: " . $e->getMessage());
+            return false;
+        }
     }
 
     public function register(array $data): void {
@@ -78,7 +86,7 @@ class AuthController {
             $user->setPassword($password);
 
             try {
-                if ($this->userRepository->create($user)) {
+                if ($this->userRepository->add($user)) {
                     error_log("Usuario creado exitosamente: " . $username);
                     $this->jsonResponse(['message' => 'Usuario creado exitosamente']);
                 } else {
@@ -157,7 +165,7 @@ class AuthController {
         try {
             $_SESSION = array();
             if (isset($_COOKIE[session_name()])) {
-                setcookie(session_name(), '', time()-42000, '/');
+                setcookie(name: session_name(), value: '', expires_or_options: time() - 42000, path: '/');
             }
             session_destroy();
             
@@ -195,14 +203,12 @@ class AuthController {
             
             error_log("Enviando respuesta JSON: " . $jsonData);
             echo $jsonData;
-            exit;
 
         } catch (Exception $e) {
             error_log("Error en jsonResponse: " . $e->getMessage());
             // Intentar enviar una respuesta de error básica
             http_response_code(500);
             echo json_encode(['error' => 'Error interno del servidor']);
-            exit;
         }
     }
 } 

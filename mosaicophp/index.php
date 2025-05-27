@@ -34,7 +34,7 @@ $contentType = isset($_SERVER['HTTP_CONTENT_TYPE']) ? $_SERVER['HTTP_CONTENT_TYP
 LogConfig::secureLog("Content Type: " . $contentType);
 
 // API endpoints
-if (strpos($request_uri, '/api/') === 0) {
+if (str_starts_with($request_uri, '/api/')) {
     header('Content-Type: application/json');
     
     $auth = new AuthController();
@@ -46,120 +46,184 @@ if (strpos($request_uri, '/api/') === 0) {
     LogConfig::secureLog("URI: " . $request_uri);
     LogConfig::secureLog("Método: " . $_SERVER['REQUEST_METHOD']);
     LogConfig::secureLog("Contenido", json_decode(file_get_contents('php://input'), true));
+
+    // Determine effective route and parameters for complex routes
+    $routeKey = $request_uri;
+    $routeParams = [];
+
+    $regexRoutes = [
+        '/^\/api\/items\/(\d+)$/' => 'api_items_single',
+        '/^\/api\/items\/(\d+)\/tasks$/' => 'api_items_tasks',
+        '/^\/api\/tasks\/(\d+)$/' => 'api_tasks_single',
+    ];
+
+    foreach ($regexRoutes as $pattern => $key) {
+        if (preg_match($pattern, $request_uri, $matches)) {
+            $routeKey = $key;
+            $routeParams = $matches;
+            break;
+        }
+    }
     
-    switch ($request_uri) {
-        case '/api/auth/login':
-            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                $data = json_decode(file_get_contents('php://input'), true);
-                $auth->login($data);
-            }
-            break;
-
-        case '/api/auth/register':
-            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                $data = json_decode(file_get_contents('php://input'), true);
-                $auth->register($data);
-            }
-            break;
-
-        case '/api/items':
-            switch ($_SERVER['REQUEST_METHOD']) {
-                case 'GET':
-                    $itemController->getItems();
-                    break;
-                case 'POST':
-                    $data = json_decode(file_get_contents('php://input'), true);
-                    $itemController->addItem($data);
-                    break;
-                default:
-                    http_response_code(405);
-                    echo json_encode(['error' => 'Método no permitido']);
-            }
-            break;
-
-        case (preg_match('/^\/api\/items\/(\d+)$/', $request_uri, $matches) ? true : false):
-            $itemId = (int)$matches[1];
+    match ($routeKey) {
+        '/api/auth/login' => match ($_SERVER['REQUEST_METHOD']) {
+            'POST' => (function() use ($auth) {
+                $rawInput = file_get_contents('php://input');
+                $data = json_decode($rawInput, true);
+                if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON format']);
+                    return;
+                }
+                $auth->login($data ?? []); // Pass empty array if data is null (e.g. empty body)
+            })(),
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido para /api/auth/login']);
+            })()
+        },
+        '/api/auth/register' => match ($_SERVER['REQUEST_METHOD']) {
+            'POST' => (function() use ($auth) {
+                $rawInput = file_get_contents('php://input');
+                $data = json_decode($rawInput, true);
+                if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON format']);
+                    return;
+                }
+                $auth->register($data ?? []);
+            })(),
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido para /api/auth/register']);
+            })()
+        },
+        '/api/items' => match ($_SERVER['REQUEST_METHOD']) {
+            'GET' => $itemController->getItems(),
+            'POST' => (function() use ($itemController) {
+                $rawInput = file_get_contents('php://input');
+                $data = json_decode($rawInput, true);
+                if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON format']);
+                    return;
+                }
+                $itemController->addItem($data ?? []);
+            })(),
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido']);
+            })()
+        },
+        'api_items_single' => (function() use ($itemController, $routeParams) {
+            $itemId = (int)$routeParams[1];
             LogConfig::secureLog("Procesando petición para item ID: " . $itemId);
             
-            switch ($_SERVER['REQUEST_METHOD']) {
-                case 'PUT':
+            match ($_SERVER['REQUEST_METHOD']) {
+                'PUT' => (function() use ($itemController, $itemId) {
                     LogConfig::secureLog("Procesando PUT request");
-                    $data = json_decode(file_get_contents('php://input'), true);
+                    $rawInput = file_get_contents('php://input');
+                    $data = json_decode($rawInput, true);
                     LogConfig::secureLog("Datos recibidos: " . print_r($data, true));
-                    if ($data === null) {
+                    if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
                         LogConfig::secureLog("Error decodificando JSON: " . json_last_error_msg());
                         http_response_code(400);
-                        echo json_encode(['error' => 'JSON inválido']);
-                        exit;
+                        echo json_encode(['error' => 'Invalid JSON format']);
+                        return; 
                     }
-                    $itemController->updateItem($itemId, $data);
-                    break;
-                case 'DELETE':
-                    $itemController->deleteItem($itemId);
-                    break;
-                default:
+                    $itemController->updateItem($itemId, $data ?? []);
+                })(),
+                'DELETE' => $itemController->deleteItem($itemId),
+                default => (function() {
                     LogConfig::secureLog("Método no soportado: " . $_SERVER['REQUEST_METHOD']);
                     http_response_code(405);
                     echo json_encode(['error' => 'Método no permitido']);
-            }
-            break;
-
-        case '/api/items/adjust':
-            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                $data = json_decode(file_get_contents('php://input'), true);
-                $itemController->adjustItem($data);
-            }
-            break;
-
-        case '/api/auth/logout':
-            if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                $auth->logout();
-            }
-            break;
-
-        case (preg_match('/^\/api\/items\/(\d+)\/tasks$/', $request_uri, $matches) ? true : false):
-            $itemId = (int)$matches[1];
-            if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+                })()
+            };
+        })(),
+        '/api/items/adjust' => match ($_SERVER['REQUEST_METHOD']) {
+            'POST' => (function() use ($itemController) {
+                $rawInput = file_get_contents('php://input');
+                $data = json_decode($rawInput, true);
+                if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON format']);
+                    return;
+                }
+                $itemController->adjustItem($data ?? []);
+            })(),
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido para /api/items/adjust']);
+            })()
+        },
+        '/api/auth/logout' => match ($_SERVER['REQUEST_METHOD']) {
+            'POST' => $auth->logout(), // Simplified if it's a single call
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido para /api/auth/logout']);
+            })()
+        },
+        'api_items_tasks' => match ($_SERVER['REQUEST_METHOD']) {
+            'GET' => (function() use ($taskController, $routeParams) {
+                $itemId = (int)$routeParams[1];
                 $taskController->getTasksByItem($itemId);
-            } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
-                $data = json_decode(file_get_contents('php://input'), true);
-                $taskController->addTask($itemId, $data);
-            }
-            break;
-
-        case (preg_match('/^\/api\/tasks\/(\d+)$/', $request_uri, $matches) ? true : false):
-            $taskId = (int)$matches[1];
-            if ($_SERVER['REQUEST_METHOD'] === 'PUT') {
-                $data = json_decode(file_get_contents('php://input'), true);
-                $taskController->updateTask($taskId, $data);
-            } elseif ($_SERVER['REQUEST_METHOD'] === 'DELETE') {
+            })(),
+            'POST' => (function() use ($taskController, $routeParams) {
+                $itemId = (int)$routeParams[1];
+                $rawInput = file_get_contents('php://input');
+                $data = json_decode($rawInput, true);
+                if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON format']);
+                    return;
+                }
+                $taskController->addTask($itemId, $data ?? []);
+            })(),
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido para /api/items/.../tasks']);
+            })()
+        },
+        'api_tasks_single' => match ($_SERVER['REQUEST_METHOD']) {
+            'PUT' => (function() use ($taskController, $routeParams) {
+                $taskId = (int)$routeParams[1];
+                $rawInput = file_get_contents('php://input');
+                $data = json_decode($rawInput, true);
+                if ($rawInput && $data === null && json_last_error() !== JSON_ERROR_NONE) {
+                    http_response_code(400);
+                    echo json_encode(['error' => 'Invalid JSON format']);
+                    return;
+                }
+                $taskController->updateTask($taskId, $data ?? []);
+            })(),
+            'DELETE' => (function() use ($taskController, $routeParams) {
+                $taskId = (int)$routeParams[1];
                 $taskController->deleteTask($taskId);
-            }
-            break;
-
-        default:
+            })(),
+            default => (function() {
+                http_response_code(405);
+                echo json_encode(['error' => 'Método no permitido para /api/tasks/...']);
+            })()
+        },
+        default => {
             LogConfig::secureLog("Ruta no encontrada: " . $request_uri);
             http_response_code(404);
             echo json_encode(['error' => 'Ruta API no encontrada']);
-    }
-    exit;
+        }
+    };
 }
 
 // Web routes
 if ($request_uri === '/login') {
     if (isset($_SESSION['user_id'])) {
         header('Location: ' . $base_path);
-        exit;
+    } else {
+        require_once __DIR__ . '/app/views/login.php';
     }
-    require_once __DIR__ . '/app/views/login.php';
-    exit;
-}
-
-// Verificar autenticación para otras rutas
-if (!isset($_SESSION['user_id'])) {
+} elseif (!isset($_SESSION['user_id'])) { // Verificar autenticación para otras rutas
     header('Location: ' . $base_path . '/login');
-    exit;
+} else {
+    // Ruta por defecto para usuarios autenticados
+    require_once __DIR__ . '/app/views/index.php';
 }
-
-// Ruta por defecto para usuarios autenticados
-require_once __DIR__ . '/app/views/index.php';
