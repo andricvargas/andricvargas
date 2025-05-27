@@ -13,7 +13,7 @@ define('RECAPTCHA_SECRET_KEY', '6LcBSq4qAAAAAEOOBOxL5bc1G1swV0QA79n-Q6ho');
 define('TIEMPO_ESPERA', 300); // 5 minutos
 
 // Función para obtener IP del cliente
-function getClientIP() {
+function getClientIP(): string {
     $ip = '';
     
     if (!empty($_SERVER['HTTP_CLIENT_IP'])) {

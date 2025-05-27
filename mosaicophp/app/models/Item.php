@@ -4,24 +4,13 @@
  * Modelo para representar un item y su repositorio
  */
 class Item {
-    public int $id;
-    public string $name;
-    public float $percentage;
-    public string $color;
-    public int $userId;
-
     public function __construct(
-        string $name, 
-        float $percentage, 
-        string $color, 
-        int $id = 0, 
-        int $userId = 0
+        public string $name,
+        public float $percentage,
+        public string $color,
+        public int $id = 0,
+        public int $userId = 0
     ) {
-        $this->id = $id;
-        $this->name = $name;
-        $this->percentage = $percentage;
-        $this->color = $color;
-        $this->userId = $userId;
     }
 
     public function toArray(): array {
@@ -146,6 +135,7 @@ class ItemRepository {
     }
 
     public function updateAllPercentages(array $items): void {
+        /** @var Item[] $items */
         if (empty($items)) return;
         
         $this->db->beginTransaction();

@@ -9,7 +9,7 @@ class User {
     }
 
     public function setPassword(string $password): void {
-        if (strpos($password, '$2y$') === 0) {
+        if (str_starts_with($password, '$2y$')) {
             $this->password = $password;
         } else {
             $this->password = password_hash($password, PASSWORD_DEFAULT);

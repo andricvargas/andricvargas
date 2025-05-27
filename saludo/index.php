@@ -11,7 +11,7 @@ if (!defined('TIEMPO_ESPERA')) {
 }
 
 // Función mejorada para obtener IP
-function getClientIP_safe() {
+function getClientIP_safe(): string {
     $ip = getClientIP(); // Usar la función existente
     
     // Verificar que la IP es válida
@@ -112,10 +112,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ];
         
         $context = stream_context_create($options);
-        $result = json_decode(file_get_contents($url, false, $context));
-        
-        if (!$result->success) {
-            $errors[] = 'Error en reCAPTCHA';
+        $recaptchaResultJson = file_get_contents($url, false, $context);
+
+        if ($recaptchaResultJson === false) {
+            $errors[] = 'Error al verificar reCAPTCHA (no se pudo contactar con el servidor)';
+        } else {
+            $recaptchaResult = json_decode($recaptchaResultJson);
+            if (!$recaptchaResult || !$recaptchaResult->success) {
+                $errors[] = 'Error en reCAPTCHA';
+            }
         }
 
         // Insertar en base de datos si no hay errores
@@ -176,6 +181,11 @@ $saludos = $stmt->fetchAll();
     <div class="container">
     <div class="form-section">
     <h2 class="birthday-title"> <span>R</span><span>e</span><span>g</span><span>i</span><span>s</span><span>t</span><span>r</span><span>a</span> <span>t</span><span>u</span> <span>s</span><span>a</span><span>l</span><span>u</span><span>d</span><span>o</span></h2>
+    
+    <!-- Placeholders for JavaScript messages -->
+    <div id="alert-success" class="alert alert-success hidden">¡Saludo registrado correctamente!</div>
+    <div id="alert-error" class="alert alert-danger hidden"></div>
+
     <?php if ($success): ?>
     <div class="alert alert-success">¡Saludo registrado correctamente!</div>
     <?php elseif (!empty($errors)): ?>

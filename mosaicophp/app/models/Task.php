@@ -4,24 +4,13 @@
  * Modelo para representar una tarea y su repositorio
  */
 class Task {
-    public int $id;
-    public int $itemId;
-    public string $description;
-    public bool $completed;
-    public string $createdAt;
-
     public function __construct(
-        string $description,
-        int $itemId,
-        bool $completed = false,
-        int $id = 0,
-        string $createdAt = ''
+        public string $description,
+        public int $itemId,
+        public bool $completed = false,
+        public int $id = 0,
+        public string $createdAt = ''
     ) {
-        $this->id = $id;
-        $this->itemId = $itemId;
-        $this->description = $description;
-        $this->completed = $completed;
-        $this->createdAt = $createdAt;
     }
 
     public function toArray(): array {
@@ -62,6 +51,7 @@ class TaskRepository {
     }
 
     public function getByItemId(int $itemId): array {
+        /** @var Task[] $tasks */
         try {
             $stmt = $this->db->prepare('SELECT * FROM tasks WHERE item_id = ? ORDER BY created_at DESC');
             $stmt->execute([$itemId]);
